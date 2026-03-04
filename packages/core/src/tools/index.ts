@@ -27,6 +27,252 @@ export class RobloxStudioTools {
     };
   }
 
+  async uploadAsset(filePath: string, assetType: 'Decal' | 'Audio' | 'Model', displayName: string, description: string, creatorType?: 'User' | 'Group', creatorId?: string, autoInsert?: boolean) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    if (!creatorType || !creatorId) {
+      const placeInfoResponse = await this.client.request('/api/place-info', {}) as any;
+      creatorType = creatorType || placeInfoResponse.creatorType;
+      creatorId = creatorId || placeInfoResponse.creatorId?.toString();
+
+      if (!creatorId || !creatorType) {
+        throw new Error("Failed to resolve creatorType and creatorId from Roblox Studio. Please provide them manually.");
+      }
+    }
+
+    if (creatorType === 'User') {
+      throw new Error("The Roblox Open Cloud API Key does not support uploading assets for User creators. You must pass a Group ID manually if uploading via API Keys.");
+    }
+
+    const fileBuffer = fs.readFileSync(filePath);
+    const result = await this.openCloudClient.createAsset(fileBuffer, assetType, displayName, description, creatorType as 'User' | 'Group', creatorId);
+
+    // Poll for the operation to complete
+    let operationId = result.operationId || result.response?.path;
+    // ensure operationId matches the path format, opencloud-client's createAsset returns `operations/{id}` typically from response.path
+    if (operationId && !operationId.startsWith('operations/')) {
+      operationId = `operations/${operationId}`;
+    }
+
+    if (operationId) {
+      let attempts = 0;
+      let statusResponse;
+      while (attempts < 15) { // wait up to 30 seconds
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        statusResponse = await this.openCloudClient.getOperationStatus(operationId);
+
+        if (statusResponse.done) {
+          if (statusResponse.response && statusResponse.response.assetId) {
+            const assetId = statusResponse.response.assetId;
+            let insertSuccessMessage = "";
+            if (autoInsert !== false) {
+              if (assetType === 'Decal') {
+                const code = `
+                  local decalId = ${assetId}
+                  local success, objects = pcall(function() return game:GetService("InsertService"):LoadAsset(decalId) end)
+                  if not success then return "Failed to load asset: " .. tostring(objects) end
+                  
+                  local imgId = ""
+                  for _, obj in pairs(objects:GetChildren()) do
+                      if obj:IsA("Decal") then
+                          imgId = obj.Texture
+                      end
+                  end
+                  if imgId == "" then return "No Decal found in loaded asset" end
+                  
+                  local gui = game.StarterGui:FindFirstChild("ScreenGui")
+                  if not gui then
+                      gui = Instance.new("ScreenGui")
+                      gui.Name = "ScreenGui"
+                      gui.Parent = game.StarterGui
+                  end
+
+                  local img = Instance.new("ImageLabel")
+                  local safeName = string.gsub("${displayName}", "[^%w]", "")
+                  if safeName == "" then safeName = "UploadedImage" end
+                  img.Name = safeName
+                  img.Image = imgId
+                  img.Size = UDim2.new(0, 300, 0, 300)
+                  img.Position = UDim2.new(0.5, -150, 0.5, -150)
+                  img.BackgroundTransparency = 1
+                  img.Parent = gui
+                  
+                  objects:Destroy()
+                  return "Successfully automatically inserted extracted Image into StarterGui.ScreenGui."
+                `;
+                try {
+                  const execResult = await this.client.request('/api/execute', { code }) as any;
+                  insertSuccessMessage = typeof execResult === 'string' ? execResult : typeof execResult?.returnValue === 'string' ? " " + execResult.returnValue : " " + JSON.stringify(execResult);
+                } catch (e: any) {
+                  insertSuccessMessage = " Failed to auto-insert: " + (e.message || String(e));
+                }
+              }
+            }
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Asset uploaded successfully! Asset ID: ${assetId}.${insertSuccessMessage}`
+                }
+              ]
+            };
+          } else if (statusResponse.error) {
+            throw new Error(`Asset upload failed during processing: ${JSON.stringify(statusResponse.error)}`);
+          }
+          break;
+        }
+        attempts++;
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Asset upload started but did not finish within 30 seconds. Operation ID: ${operationId}. Response: ${JSON.stringify(result)}`
+        }
+      ]
+    };
+  }
+
+  async removeImageBackground(filePath: string) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    if (!process.env.REPLICATE_API_TOKEN) {
+      throw new Error(`REPLICATE_API_TOKEN is not set in the environment variables.`);
+    }
+
+    try {
+      const Replicate = (await import('replicate')).default;
+      const replicate = new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+      });
+
+      const fileBuffer = fs.readFileSync(filePath);
+      const mimeType = filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+      const b64 = fileBuffer.toString('base64');
+      const dataUri = `data:${mimeType};base64,${b64}`;
+
+      const input = {
+        image: dataUri
+      };
+
+      const output = await replicate.run("851-labs/background-remover:a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc", { input }) as any;
+
+      const fsPromises = (await import('fs/promises'));
+      await fsPromises.writeFile(filePath, output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Successfully removed background using Replicate API and overwrote the file: ${filePath}`
+          }
+        ]
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to remove background: ${error.message || String(error)}`);
+    }
+  }
+
+  async generateImageNanoBanana(prompt: string, aspectRatio: string = '1:1', outputFileName: string) {
+    if (!process.env.REPLICATE_API_TOKEN) {
+      throw new Error(`REPLICATE_API_TOKEN is not set in the environment variables.`);
+    }
+
+    try {
+      const Replicate = (await import('replicate')).default;
+      const replicate = new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+      });
+
+      const input = { prompt, aspect_ratio: aspectRatio };
+      const output = await replicate.run("google/nano-banana-2", { input }) as any;
+      const outputUrl = Array.isArray(output) ? output[0] : (typeof output === 'string' ? output : String(output.url ? output.url() || output.url : output));
+
+      const fsPromises = (await import('fs/promises'));
+      let actualUrl = outputUrl;
+      if (output && typeof output.url === 'function') {
+        actualUrl = output.url();
+      } else if (Buffer.isBuffer(output) || output instanceof Blob || output instanceof ArrayBuffer) {
+        // Replicate SDK might return a stream / buffer directly for some models
+        await fsPromises.writeFile(outputFileName, Buffer.from(output as ArrayBuffer));
+        return {
+          content: [{ type: 'text', text: `Successfully generated and saved Nano Banana 2 image to: ${outputFileName}` }]
+        };
+      }
+
+      if (!actualUrl || !actualUrl.startsWith('http')) {
+        throw new Error("Could not extract a valid URL or Buffer from Replicate output: " + JSON.stringify(outputUrl));
+      }
+
+      const fetchImg = await fetch(actualUrl);
+      if (!fetchImg.ok) throw new Error(`Failed to fetch generated image from Replicate URL: ${fetchImg.statusText}`);
+
+      const arrayBuffer = await fetchImg.arrayBuffer();
+      await fsPromises.writeFile(outputFileName, Buffer.from(arrayBuffer));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Successfully generated and saved Nano Banana 2 image to: ${outputFileName}`
+          }
+        ]
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to generate Nano Banana 2 image: ${error.message || String(error)}`);
+    }
+  }
+
+  async generateAudioElevenLabs(text: string, voiceId: string = 'JBFqnCBcs6TWre8vMePZ', outputFileName: string) {
+    if (!process.env.ELEVENLABS_API_KEY) {
+      throw new Error(`ELEVENLABS_API_KEY is not set in the environment variables.`);
+    }
+
+    try {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': process.env.ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: "eleven_monolingual_v1",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API returned ${response.status}: ${await response.text()}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const fsPromises = (await import('fs/promises'));
+      await fsPromises.writeFile(outputFileName, Buffer.from(arrayBuffer));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Successfully generated and saved ElevenLabs TTS audio to: ${outputFileName}`
+          }
+        ]
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to generate ElevenLabs audio: ${error.message || String(error)}`);
+    }
+  }
+
   async searchFiles(query: string, searchType: string = 'name') {
     const response = await this.client.request('/api/search-files', { query, searchType });
     return {
@@ -240,7 +486,7 @@ export class RobloxStudioTools {
     };
   }
 
-  async massCreateObjects(objects: Array<{className: string, parent: string, name?: string, properties?: Record<string, any>}>) {
+  async massCreateObjects(objects: Array<{ className: string, parent: string, name?: string, properties?: Record<string, any> }>) {
     if (!objects || objects.length === 0) {
       throw new Error('Objects array is required for mass_create_objects');
     }

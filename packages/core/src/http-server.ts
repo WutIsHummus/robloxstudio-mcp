@@ -72,6 +72,9 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   get_asset_thumbnail: (tools, body) => tools.getAssetThumbnail(body.assetId, body.size),
   insert_asset: (tools, body) => tools.insertAsset(body.assetId, body.parentPath, body.position),
   preview_asset: (tools, body) => tools.previewAsset(body.assetId, body.includeProperties, body.maxDepth),
+  generate_image_nano_banana: (tools, body) => tools.generateImageNanoBanana(body.prompt, body.aspectRatio, body.outputFileName),
+  generate_audio_elevenlabs: (tools, body) => tools.generateAudioElevenLabs(body.text, body.voiceId, body.outputFileName),
+  remove_image_background: (tools, body) => tools.removeImageBackground(body.filePath),
 };
 
 export function createHttpServer(tools: RobloxStudioTools, bridge: BridgeService, allowedTools?: Set<string>) {

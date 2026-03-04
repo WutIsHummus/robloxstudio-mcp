@@ -93,6 +93,8 @@ function getPlaceInfo(_requestData: Record<string, unknown>) {
 		placeId: game.PlaceId,
 		gameId: game.GameId,
 		jobId: game.JobId,
+		creatorId: game.CreatorId,
+		creatorType: game.CreatorType.Name,
 		workspace: {
 			name: game.Workspace.Name,
 			className: game.Workspace.ClassName,

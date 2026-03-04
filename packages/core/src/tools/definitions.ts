@@ -194,6 +194,117 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     }
   },
 
+  // === Asset Upload Support ===
+  {
+    name: 'upload_asset',
+    category: 'write',
+    description: 'Upload a local image/audio file to Roblox as an Asset (Decal, Audio). NOTE: you must first generate the image locally yourself if you are an AI that can generate images. If you cannot generate standard image formats locally and save them to the disk, DO NOT USE THIS TOOL, and instead inform the user that you lack the ability to generate images.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Absolute path to the local file (e.g., .png or .mp3)'
+        },
+        assetType: {
+          type: 'string',
+          enum: ['Decal', 'Audio'],
+          description: 'Type of asset to upload'
+        },
+        displayName: {
+          type: 'string',
+          description: 'Name of the asset'
+        },
+        description: {
+          type: 'string',
+          description: 'Description of the asset'
+        },
+        creatorType: {
+          type: 'string',
+          enum: ['User', 'Group'],
+          description: 'Type of creator to upload this asset under'
+        },
+        creatorId: {
+          type: 'string',
+          description: 'Roblox user ID or group ID to upload to (e.g. "123456"). Note: the Open Cloud API key must have permissions for this creator and creatorType. Optional: If omitted, the server will attempt to use the current Place\'s creator.'
+        },
+        autoInsert: {
+          type: 'boolean',
+          description: 'Whether to automatically insert the uploaded asset into the game. If true, Decals are extracted to Images and placed in StarterGui by default unless requested otherwise. Default: true.',
+          default: true
+        }
+      },
+      required: ['filePath', 'assetType', 'displayName', 'description']
+    }
+  },
+
+  {
+    name: 'remove_image_background',
+    category: 'write',
+    description: 'Run 851-labs/background-remover using Replicate. Removes the background of a local image and overwrites it. Requires REPLICATE_API_TOKEN environment variable.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Absolute path to the local image file (e.g., .png or .jpg)'
+        }
+      },
+      required: ['filePath']
+    }
+  },
+
+  {
+    name: 'generate_image_nano_banana',
+    category: 'write',
+    description: 'Generate an image using google/nano-banana-2 via Replicate. Requires REPLICATE_API_TOKEN environment variable. Saves the image to a local file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'Text prompt for image generation'
+        },
+        aspectRatio: {
+          type: 'string',
+          enum: ['1:1', '16:9', '9:16', '3:2', '2:3', '4:5', '5:4', '3:4', '4:3', '21:9'],
+          description: 'Aspect ratio of the generated image. Default 1:1',
+          default: '1:1'
+        },
+        outputFileName: {
+          type: 'string',
+          description: 'Absolute path to save the generated image (e.g. C:/temp/image.png) or just the filename to save in the current working directory.'
+        }
+      },
+      required: ['prompt', 'outputFileName']
+    }
+  },
+
+  {
+    name: 'generate_audio_elevenlabs',
+    category: 'write',
+    description: 'Generate text-to-speech audio using ElevenLabs API. Requires ELEVENLABS_API_KEY environment variable. Saves the audio to a local .mp3 file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to synthesize into speech'
+        },
+        voiceId: {
+          type: 'string',
+          description: 'ElevenLabs Voice ID to use. Default is "JBFqnCBcs6TWre8vMePZ".',
+          default: 'JBFqnCBcs6TWre8vMePZ'
+        },
+        outputFileName: {
+          type: 'string',
+          description: 'Absolute path to save the generated audio (e.g. C:/temp/audio.mp3) or just the filename to save in the current working directory.'
+        }
+      },
+      required: ['text', 'outputFileName']
+    }
+  },
+
   // === Property Write ===
   {
     name: 'set_property',

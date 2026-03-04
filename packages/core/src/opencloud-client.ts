@@ -243,4 +243,122 @@ export class OpenCloudClient {
 
     return result;
   }
+
+  async createAsset(
+    fileBuffer: Buffer,
+    assetType: 'Decal' | 'Audio' | 'Model',
+    displayName: string,
+    description: string,
+    creatorType: 'User' | 'Group',
+    creatorId: string,
+    expectedPrice?: number
+  ): Promise<{ operationId: string; response: any }> {
+    if (!this.apiKey) {
+      throw new Error(
+        'Open Cloud API key not configured. Set ROBLOX_OPEN_CLOUD_API_KEY environment variable.'
+      );
+    }
+
+    const formData = new FormData();
+    const requestData: any = {
+      assetType,
+      displayName,
+      description,
+      creationContext: {
+        creator: creatorType === 'User' ? { userId: creatorId } : { groupId: creatorId },
+      }
+    };
+    if (expectedPrice !== undefined) {
+      requestData.creationContext.expectedPrice = expectedPrice;
+    }
+
+    formData.append('request', JSON.stringify(requestData));
+
+    const mimeType = assetType === 'Audio' ? 'audio/mpeg' : (assetType === 'Model' ? 'application/octet-stream' : 'image/png');
+    const filename = assetType === 'Audio' ? 'audio.mp3' : (assetType === 'Model' ? 'model.fbx' : 'image.png');
+
+    const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
+    formData.append('fileContent', blob, filename);
+
+    const url = `${this.baseUrl}/assets/v1/assets`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+        },
+        body: formData as any,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        let errorMessage: string;
+        try {
+          const errorJson = JSON.parse(errorBody);
+          errorMessage = errorJson.detail || errorJson.message || errorBody;
+        } catch {
+          errorMessage = errorBody;
+        }
+
+        if (response.status === 401) {
+          throw new Error('Invalid or expired API key');
+        } else if (response.status === 403) {
+          throw new Error(`API key lacks required permissions: ${errorMessage}`);
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        } else {
+          throw new Error(`Open Cloud API error (${response.status}): ${errorMessage}`);
+        }
+      }
+
+      const responseData = await response.json() as any;
+      return { operationId: responseData.operationId || responseData.path, response: responseData };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Request timed out');
+        }
+        throw error;
+      }
+      throw new Error(`Unknown error: ${String(error)}`);
+    }
+  }
+
+  async getOperationStatus(operationPath: string): Promise<any> {
+    if (!this.apiKey) {
+      throw new Error('Open Cloud API key not configured.');
+    }
+
+    const url = `${this.baseUrl}/assets/v1/${operationPath}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'x-api-key': this.apiKey,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get operation status (${response.status}): ${await response.text()}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
 }

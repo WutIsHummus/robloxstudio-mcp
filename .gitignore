@@ -62,3 +62,7 @@ lune.zip
 
 # Build library (local user data)
 build-library/
+
+# Secrets and standalone scripts
+key.txt
+remove_bg.mjs

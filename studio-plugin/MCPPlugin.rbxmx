@@ -2919,6 +2919,8 @@ local function getPlaceInfo(_requestData)
 		placeId = game.PlaceId,
 		gameId = game.GameId,
 		jobId = game.JobId,
+		creatorId = game.CreatorId,
+		creatorType = game.CreatorType.Name,
 		workspace = {
 			name = game.Workspace.Name,
 			className = game.Workspace.ClassName,

@@ -210,6 +210,14 @@ export class RobloxStudioMCPServer {
             return await this.tools.insertAsset((args as any)?.assetId as number, (args as any)?.parentPath, (args as any)?.position);
           case 'preview_asset':
             return await this.tools.previewAsset((args as any)?.assetId as number, (args as any)?.includeProperties, (args as any)?.maxDepth);
+          case 'upload_asset':
+            return await this.tools.uploadAsset((args as any)?.filePath as string, (args as any)?.assetType as any, (args as any)?.displayName as string, (args as any)?.description as string, (args as any)?.creatorType as any, (args as any)?.creatorId as string, (args as any)?.autoInsert as boolean);
+          case 'generate_image_nano_banana':
+            return await this.tools.generateImageNanoBanana((args as any)?.prompt, (args as any)?.aspectRatio, (args as any)?.outputFileName);
+          case 'generate_audio_elevenlabs':
+            return await this.tools.generateAudioElevenLabs((args as any)?.text, (args as any)?.voiceId, (args as any)?.outputFileName);
+          case 'remove_image_background':
+            return await this.tools.removeImageBackground((args as any)?.filePath as string);
 
           default:
             throw new McpError(
