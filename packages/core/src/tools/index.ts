@@ -47,7 +47,7 @@ export class RobloxStudioTools {
     }
 
     const fileBuffer = fs.readFileSync(filePath);
-    const result = await this.openCloudClient.createAsset(fileBuffer, assetType, displayName, description, creatorType as 'User' | 'Group', creatorId);
+    const result = await this.openCloudClient.createAsset(fileBuffer, assetType, displayName, description, creatorType as 'User' | 'Group', creatorId, undefined, filePath);
 
     // Poll for the operation to complete
     let operationId = result.operationId || result.response?.path;

@@ -75,6 +75,7 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   generate_image_nano_banana: (tools, body) => tools.generateImageNanoBanana(body.prompt, body.aspectRatio, body.outputFileName),
   generate_audio_elevenlabs: (tools, body) => tools.generateAudioElevenLabs(body.text, body.voiceId, body.outputFileName),
   remove_image_background: (tools, body) => tools.removeImageBackground(body.filePath),
+  upload_asset: (tools, body) => tools.uploadAsset(body.filePath, body.assetType, body.displayName, body.description, body.creatorType, body.creatorId, body.autoInsert),
 };
 
 export function createHttpServer(tools: RobloxStudioTools, bridge: BridgeService, allowedTools?: Set<string>) {

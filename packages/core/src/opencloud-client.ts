@@ -251,7 +251,8 @@ export class OpenCloudClient {
     description: string,
     creatorType: 'User' | 'Group',
     creatorId: string,
-    expectedPrice?: number
+    expectedPrice?: number,
+    originalFilePath?: string
   ): Promise<{ operationId: string; response: any }> {
     if (!this.apiKey) {
       throw new Error(
@@ -274,8 +275,27 @@ export class OpenCloudClient {
 
     formData.append('request', JSON.stringify(requestData));
 
-    const mimeType = assetType === 'Audio' ? 'audio/mpeg' : (assetType === 'Model' ? 'application/octet-stream' : 'image/png');
-    const filename = assetType === 'Audio' ? 'audio.mp3' : (assetType === 'Model' ? 'model.fbx' : 'image.png');
+    const ext = originalFilePath ? originalFilePath.split('.').pop()?.toLowerCase() : undefined;
+
+    const MIME_MAP: Record<string, string> = {
+      // Audio
+      mp3: 'audio/mpeg', ogg: 'audio/ogg',
+      // Image / Decal
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp', tga: 'image/tga',
+      // Model
+      fbx: 'model/fbx',
+    };
+
+    const DEFAULT_MIME: Record<string, string> = {
+      Audio: 'audio/mpeg', Decal: 'image/png', Model: 'model/fbx',
+    };
+
+    const DEFAULT_FILENAME: Record<string, string> = {
+      Audio: 'audio.mp3', Decal: 'image.png', Model: 'model.fbx',
+    };
+
+    const mimeType = (ext && MIME_MAP[ext]) || DEFAULT_MIME[assetType] || 'application/octet-stream';
+    const filename = ext ? `file.${ext}` : DEFAULT_FILENAME[assetType] || 'file.bin';
 
     const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
     formData.append('fileContent', blob, filename);
